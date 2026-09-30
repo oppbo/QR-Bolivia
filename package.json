@@ -10,7 +10,9 @@
     "test": "vitest run",
     "predev": "node scripts/copiar-recursos-ocr.mjs",
     "prebuild": "node scripts/copiar-recursos-ocr.mjs",
-    "iconos": "node scripts/generar-iconos.mjs"
+    "iconos": "node scripts/generar-iconos.mjs",
+    "test:e2e": "npm run build && node tests/e2e/navegador.e2e.mjs",
+    "entrega": "node scripts/generar-entrega.mjs"
   },
   "dependencies": {
     "react": "^19.3.0",
@@ -21,6 +23,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tesseract.js-data/spa": "^1.0.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.56.1",
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"

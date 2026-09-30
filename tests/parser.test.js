@@ -155,6 +155,10 @@ describe('no confunde montos con otros números', () => {
     ['Comisión Bs 2,00', 'ninguno'],
     ['Saldo disponible: Bs 1.500,00', 'ninguno'],
     ['Monto: USD 50', 'ninguno'],
+    ['Monto: Bs -50', 'ninguno'],
+    ['Monto: -50', 'ninguno'],
+    ['Recibiste Bs 0,00', 'ninguno'],
+    ['Monto recibido: Bs 999999999', 'ninguno'],
   ])('%j → %s', (entrada, tipo) => {
     expect(analizarTexto(entrada).tipo).toBe(tipo);
   });

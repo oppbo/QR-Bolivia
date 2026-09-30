@@ -48,6 +48,9 @@ export const CONFIG = {
   MAX_CARACTERES_TEXTO: 2000,
   // Tiempo para considerar que el navegador bloqueó la voz automática.
   ESPERA_INICIO_VOZ_MS: 2500,
+  // Tras este tiempo sin lecturas se termina el worker de OCR para devolver
+  // memoria al teléfono. La siguiente lectura lo recrea desde la caché (~1 s).
+  LIBERAR_WORKER_INACTIVO_MS: 3 * 60 * 1000,
 };
 
 // Carpeta versionada de los recursos OCR (la inyecta vite.config.js).
@@ -501,6 +504,30 @@ function useVoz() {
   }, [soporte]);
 
   /**
+   * Mejora de mejor esfuerzo para iOS: Safari solo permite hablar si la
+   * primera locución ocurre durante un toque del usuario. Al tocar «Subir
+   * captura» se emite una locución silenciosa (volumen 0) que "desbloquea" la
+   * síntesis; así, cuando el OCR termina segundos después, la voz automática
+   * tiene más probabilidades de sonar. No está garantizado.
+   */
+  const desbloqueadoRef = useRef(false);
+  const desbloquear = useCallback(() => {
+    if (!soporte || desbloqueadoRef.current) return;
+    const voz = elegirVozLocal(window.speechSynthesis.getVoices());
+    if (!voz) return;
+    try {
+      const silenciosa = new window.SpeechSynthesisUtterance(' ');
+      silenciosa.voice = voz;
+      silenciosa.lang = voz.lang;
+      silenciosa.volume = 0;
+      window.speechSynthesis.speak(silenciosa);
+      desbloqueadoRef.current = true;
+    } catch {
+      // Sin desbloqueo queda el botón «Escuchar monto».
+    }
+  }, [soporte]);
+
+  /**
    * Habla un texto. Devuelve una promesa que se resuelve con
    * { ok: true } o { ok: false, motivo } — nunca lanza errores.
    */
@@ -571,7 +598,7 @@ function useVoz() {
     [soporte],
   );
 
-  return { soporte, vozLocal, vocesCargadas, hablar, detener };
+  return { soporte, vozLocal, vocesCargadas, hablar, detener, desbloquear };
 }
 
 /* =========================================================================
@@ -621,6 +648,8 @@ async function recursosOcrEnCache() {
 function useOcr() {
   const workerPromesaRef = useRef(null);
   const oyenteProgresoRef = useRef(null);
+  const enUsoRef = useRef(0); // lecturas o preparaciones en curso
+  const temporizadorRef = useRef(null);
 
   const obtenerWorker = useCallback(() => {
     if (!workerPromesaRef.current) {
@@ -628,16 +657,51 @@ function useOcr() {
         const modulo = await import('tesseract.js');
         const createWorker = modulo.createWorker ?? modulo.default?.createWorker;
         const base = urlRecursosOcr();
-        return createWorker('spa', 1, {
-          workerPath: `${base}worker.min.js`,
-          corePath: `${base}core`,
-          langPath: `${base}lang`,
-          workerBlobURL: false,
-          cacheMethod: 'none',
-          gzip: true,
-          logger: (mensaje) => oyenteProgresoRef.current?.(mensaje),
-          errorHandler: () => {},
+
+        // En Tesseract.js 7, si falla la descarga del MODELO DE IDIOMA (o su
+        // inicialización), la promesa de createWorker nunca se rechaza: solo se
+        // llama a errorHandler. Para no dejar la lectura colgada:
+        //  1) errorHandler rechaza nuestra propia promesa de inicio;
+        //  2) se captura el Web Worker que crea la librería (lo crea de forma
+        //     síncrona al llamar a createWorker) para poder terminarlo si falla.
+        let rechazarInicio = null;
+        const falloInicio = new Promise((_, rechazar) => {
+          rechazarInicio = rechazar;
         });
+        const WorkerOriginal = window.Worker;
+        let hiloCapturado = null;
+        window.Worker = class extends WorkerOriginal {
+          constructor(...argumentos) {
+            super(...argumentos);
+            hiloCapturado = this;
+          }
+        };
+        let creacion;
+        try {
+          creacion = createWorker('spa', 1, {
+            workerPath: `${base}worker.min.js`,
+            corePath: `${base}core`,
+            langPath: `${base}lang`,
+            workerBlobURL: false,
+            cacheMethod: 'none',
+            gzip: true,
+            logger: (mensaje) => oyenteProgresoRef.current?.(mensaje),
+            // Después del inicio, los errores llegan como rechazo de recognize().
+            errorHandler: () => rechazarInicio?.(new Error('fallo-inicio-ocr')),
+          });
+        } finally {
+          window.Worker = WorkerOriginal;
+        }
+        try {
+          const worker = await Promise.race([creacion, falloInicio]);
+          rechazarInicio = null;
+          return worker;
+        } catch (error) {
+          rechazarInicio = null;
+          hiloCapturado?.terminate();
+          creacion.then((w) => w.terminate()).catch(() => {});
+          throw error;
+        }
       })();
       workerPromesaRef.current = promesa;
       // Si falla (por ejemplo, sin conexión), se olvida para reintentar luego.
@@ -661,10 +725,32 @@ function useOcr() {
     }
   }, []);
 
-  // Al desmontar el componente se libera el worker.
-  useEffect(() => () => void liberarWorker(), [liberarWorker]);
+  // Reutilización con límite: mientras haya uso activo el worker se conserva;
+  // cuando queda inactivo se programa su liberación.
+  const empezarUso = useCallback(() => {
+    enUsoRef.current += 1;
+    clearTimeout(temporizadorRef.current);
+  }, []);
 
-  return { obtenerWorker, liberarWorker, oyenteProgresoRef };
+  const terminarUso = useCallback(() => {
+    enUsoRef.current = Math.max(0, enUsoRef.current - 1);
+    if (enUsoRef.current > 0) return;
+    clearTimeout(temporizadorRef.current);
+    temporizadorRef.current = setTimeout(() => {
+      if (enUsoRef.current === 0) void liberarWorker();
+    }, CONFIG.LIBERAR_WORKER_INACTIVO_MS);
+  }, [liberarWorker]);
+
+  // Al desmontar el componente se cancela el temporizador y se libera el worker.
+  useEffect(
+    () => () => {
+      clearTimeout(temporizadorRef.current);
+      void liberarWorker();
+    },
+    [liberarWorker],
+  );
+
+  return { obtenerWorker, liberarWorker, empezarUso, terminarUso, oyenteProgresoRef };
 }
 
 class ErrorLectura extends Error {
@@ -890,7 +976,7 @@ export default function App() {
   const [hayActualizacion, setHayActualizacion] = useState(false);
 
   const voz = useVoz();
-  const { obtenerWorker, liberarWorker, oyenteProgresoRef } = useOcr();
+  const { obtenerWorker, liberarWorker, empezarUso, terminarUso, oyenteProgresoRef } = useOcr();
 
   const montadoRef = useRef(false);
   const ocupadoRef = useRef(false); // impide procesamientos simultáneos
@@ -1019,8 +1105,13 @@ export default function App() {
           calidad,
         });
         setAnuncio('Revisa el resultado: elige el monto correcto.');
-        // No se anuncia ninguna cantidad ambigua.
-        decir('Encontramos más de un monto posible. Elige el correcto en la pantalla', setAvisoVoz);
+        // No se anuncia ninguna cantidad ambigua, solo que hay que revisar.
+        decir(
+          analisis.tipo === 'varios'
+            ? 'Encontramos más de un monto posible. Elige el correcto en la pantalla'
+            : 'Revisa el monto en la pantalla antes de continuar',
+          setAvisoVoz,
+        );
       }
     },
     [agregarAlHistorial, decir],
@@ -1059,6 +1150,7 @@ export default function App() {
       if (!archivo || ocupadoRef.current) return;
 
       ocupadoRef.current = true;
+      empezarUso();
       const idLectura = ++lecturaRef.current;
       const vigente = () => montadoRef.current && lecturaRef.current === idLectura;
       voz.detener();
@@ -1118,13 +1210,25 @@ export default function App() {
           mostrarError(error instanceof ErrorLectura ? error.codigo : 'general', 'imagen', 'imagen');
         }
       } finally {
+        terminarUso();
         if (lecturaRef.current === idLectura) {
           ocupadoRef.current = false;
           oyenteProgresoRef.current = null;
         }
       }
     },
-    [aplicarAnalisis, cambiarVistaPrevia, liberarWorker, mostrarError, obtenerWorker, oyenteProgresoRef, reportarProgreso, voz],
+    [
+      aplicarAnalisis,
+      cambiarVistaPrevia,
+      empezarUso,
+      liberarWorker,
+      mostrarError,
+      obtenerWorker,
+      oyenteProgresoRef,
+      reportarProgreso,
+      terminarUso,
+      voz,
+    ],
   );
 
   // Cancelar: invalida la lectura y termina el worker (Tesseract no permite
@@ -1213,6 +1317,7 @@ export default function App() {
       return;
     }
     setPreparacion({ estado: 'preparando', etapa: 'Descargando el lector de imágenes…' });
+    empezarUso();
     const oyenteAnterior = oyenteProgresoRef.current;
     if (!ocupadoRef.current) {
       oyenteProgresoRef.current = (m) => {
@@ -1238,13 +1343,17 @@ export default function App() {
         setPreparacion({ estado: 'error', etapa: 'No se pudo descargar el lector. Revisa tu conexión e inténtalo otra vez.' });
       }
     } finally {
+      terminarUso();
       if (!ocupadoRef.current) oyenteProgresoRef.current = oyenteAnterior;
     }
-  }, [obtenerWorker, oyenteProgresoRef]);
+  }, [empezarUso, obtenerWorker, oyenteProgresoRef, terminarUso]);
 
   const actualizarApp = useCallback(() => {
     const enEspera = window.__alertaQrSwEnEspera;
-    if (enEspera) enEspera.postMessage({ tipo: 'SALTAR_ESPERA' });
+    if (!enEspera) return;
+    // main.jsx recarga la página cuando la versión nueva toma el control.
+    window.__alertaQrActualizacionPedida = true;
+    enEspera.postMessage({ tipo: 'SALTAR_ESPERA' });
   }, []);
 
   /* ------------------------------------------------------------------------
@@ -1274,6 +1383,7 @@ export default function App() {
           <button type="button" className={claseBotonAzul} onClick={actualizarApp} disabled={procesando}>
             Actualizar ahora
           </button>
+          {procesando && <p className="text-base">Podrás actualizar cuando termine la lectura.</p>}
         </div>
       )}
 
@@ -1332,6 +1442,7 @@ export default function App() {
             accept="image/*"
             className="peer sr-only"
             onChange={manejarArchivo}
+            onClick={voz.desbloquear}
             disabled={procesando}
             aria-describedby={`ayuda-archivo${errorImagen ? ' error-imagen' : ''}`}
             aria-invalid={errorImagen || undefined}
@@ -1427,9 +1538,19 @@ export default function App() {
                 {MENSAJES_ERROR[estado.error]}
               </p>
             )}
-            <button type="submit" className={claseBotonAzul} disabled={procesando}>
+            <button
+              type="submit"
+              className={claseBotonAzul}
+              disabled={procesando}
+              aria-describedby={procesando ? 'aviso-ocupado' : undefined}
+            >
               <span aria-hidden="true">🔎</span> Leer monto del texto
             </button>
+            {procesando && (
+              <p id="aviso-ocupado" className="text-base font-semibold text-slate-800">
+                Espera a que termine la lectura de la imagen o pulsa «Cancelar lectura».
+              </p>
+            )}
             {puedePegar && (
               <button type="button" className={claseBotonBlanco} onClick={pegarDesdePortapapeles} disabled={procesando}>
                 <span aria-hidden="true">📋</span> Pegar desde el portapapeles

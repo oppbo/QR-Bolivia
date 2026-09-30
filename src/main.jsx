@@ -44,10 +44,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       });
   });
 
-  // Tras pulsar "Actualizar", el worker nuevo toma el control y recargamos una
-  // sola vez. En la primera instalación no recargamos.
+  // Tras pulsar "Actualizar" (o si otra pestaña activó la versión nueva), el
+  // worker nuevo toma el control y recargamos una sola vez. En la primera
+  // instalación (clients.claim sin versión anterior) no recargamos.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!habiaControlador || recargando) return;
+    if (recargando) return;
+    if (!habiaControlador && !window.__alertaQrActualizacionPedida) return;
     recargando = true;
     window.location.reload();
   });

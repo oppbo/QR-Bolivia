@@ -60,11 +60,15 @@ Con este repositorio clonado:
 ```bash
 npm install          # instala dependencias
 npm run dev          # desarrollo en http://localhost:5173 (copia antes los recursos OCR)
-npm test             # pruebas automáticas del intérprete
+npm test             # 72 pruebas automáticas del intérprete (Vitest)
 npm run build        # producción en dist/ (copia antes los recursos OCR)
 npm run preview      # previsualiza dist/ en http://localhost:4173
+npm run test:e2e     # compila y prueba la app en Chromium (54 comprobaciones)
 npm run iconos       # (opcional) regenera los iconos PNG
+npm run entrega      # (opcional) regenera ENTREGA.md con el código completo
 ```
+
+`test:e2e` usa Playwright 1.56.1. Si en tu equipo no tienes su Chromium, ejecuta una vez `npx playwright install chromium`, o define `CHROMIUM_PATH` con la ruta de un Chromium instalado.
 
 `predev` y `prebuild` ejecutan `scripts/copiar-recursos-ocr.mjs`, que deja los recursos OCR en `public/ocr/<tesseract>-<core>-spa<modelo>/`. Esa carpeta está en `.gitignore` porque se genera desde `node_modules`. El nombre versionado evita mezclar un worker nuevo con un núcleo viejo guardado en caché.
 
@@ -90,6 +94,7 @@ Si omites estas rutas, Tesseract.js descarga de un CDN externo (jsDelivr). La ap
 ├── package-lock.json
 ├── vite.config.js
 ├── README.md
+├── ENTREGA.md               ← respuesta completa por pasos, con todo el código
 ├── .gitignore
 ├── public/
 │   ├── manifest.json
@@ -107,18 +112,20 @@ Si omites estas rutas, Tesseract.js descarga de un CDN externo (jsDelivr). La ap
 ├── scripts/
 │   ├── rutas-ocr.mjs
 │   ├── copiar-recursos-ocr.mjs
-│   └── generar-iconos.mjs
+│   ├── generar-iconos.mjs
+│   └── generar-entrega.mjs
 ├── src/
 │   ├── main.jsx             ← monta React y registra el service worker
 │   ├── index.css
 │   └── App.jsx
 └── tests/
-    └── parser.test.js
+    ├── parser.test.js
+    └── e2e/navegador.e2e.mjs
 ```
 
 ## Paso 4. Código
 
-El código completo está en los archivos del repositorio, comentado en español (interpretación de importes, ambigüedad, ciclo de vida del worker, voz, privacidad y errores). Puntos clave:
+El código completo está en los archivos del repositorio, comentado en español (interpretación de importes, ambigüedad, ciclo de vida del worker, voz, privacidad y errores). **`ENTREGA.md` reproduce cada archivo completo con su ruta encima del bloque de código.** Puntos clave:
 
 ### Interpretación de importes (`src/App.jsx`, sección 2)
 
@@ -139,7 +146,8 @@ Los formatos de Banco Unión, BCP, BNB, Banco Económico y Banco FIE pueden vari
 
 ### OCR (`useOcr()` y `manejarArchivo()`)
 
-- `import('tesseract.js')` y `createWorker()` se ejecutan solo al leer la primera imagen. El worker se **reutiliza** después.
+- `import('tesseract.js')` y `createWorker()` se ejecutan solo al leer la primera imagen. El worker se **reutiliza** en las lecturas siguientes y se **termina tras 3 minutos sin uso** (`CONFIG.LIBERAR_WORKER_INACTIVO_MS`) para devolver memoria al teléfono. La siguiente lectura lo recrea desde la caché en ~1 s.
+- **Error de Tesseract.js 7 que se esquiva:** si falla la descarga o la inicialización del modelo de idioma, `createWorker` no rechaza su promesa (solo llama a `errorHandler`). La app convierte ese aviso en un rechazo, termina el Web Worker interno y muestra «No se pudo descargar el lector…». El siguiente intento empieza de cero.
 - `ocupadoRef` impide lecturas simultáneas y el input se deshabilita mientras se lee. `lecturaRef` numera cada lectura, así un resultado viejo se ignora si hubo cancelación o una lectura nueva. `montadoRef` evita actualizar el estado después de desmontar.
 - `input.value = ''` permite elegir **el mismo archivo** otra vez.
 - Validaciones: tipo `image/*` (o tipo vacío en algunos Android), máximo 10 MB, decodificación con `<img>` y máximo de 40 MP **antes** de dibujar en canvas.
@@ -153,6 +161,7 @@ Los formatos de Banco Unión, BCP, BNB, Banco Económico y Banco FIE pueden vari
 - Solo usa voces en español con `localService === true`. Prioridad: `es-BO`, luego español latinoamericano, luego `es-ES`. **Nunca pasa en silencio a una voz remota**: si no hay voz local, muestra el mensaje y el monto sigue en pantalla.
 - Escucha `voiceschanged` con `addEventListener`, así no pisa otros manejadores, y limpia al desmontar.
 - Cancela la locución anterior, usa velocidad 0,95 y volumen 1, y maneja errores (`not-allowed`, sin respuesta en 2,5 s, etc.).
+- Al tocar «Subir captura» se emite una locución **silenciosa** (volumen 0) que "desbloquea" la síntesis en Safari para iOS. Es una mejora de mejor esfuerzo.
 - Después del OCR intenta hablar automáticamente. Si el navegador lo bloquea (frecuente en iOS), queda el botón grande «Escuchar monto».
 
 ### PWA
@@ -172,7 +181,7 @@ Los formatos de Banco Unión, BCP, BNB, Banco Económico y Banco FIE pueden vari
 npm test
 ```
 
-`tests/parser.test.js`: **68 pruebas**, todas pasan.
+`tests/parser.test.js`: **72 pruebas**, todas pasan.
 
 ### Casos mínimos
 
@@ -194,26 +203,41 @@ npm test
 | 14 | `Monto recibido: Bs 1.250` | Revisar: 1.250,00 o 1,25 | Formato ambiguo, no se adivina |
 | 15 | Sin voz local | Monto visible + «No hay una voz en español instalada…» | Probado en Chromium sin voces |
 
-También cubren: los 11 formatos mínimos, `Bs 5O,00` (corrección OCR), hora, teléfono, cuenta, referencia, comisión, saldo disponible, USD, un SMS completo con saldo y comisión, montos repetidos que se unifican, estados adversos, formato boliviano, frases de voz (singular y plural, sin «pago recibido») y la selección de voz local, con descarte de voces remotas y de otros idiomas.
+También cubren: los 11 formatos mínimos, `Bs 5O,00` (corrección OCR), hora, teléfono, cuenta, referencia, comisión, saldo disponible, USD, un SMS completo con saldo y comisión, montos repetidos que se unifican, negativos, cero y valores sobre el límite, estados adversos, formato boliviano, frases de voz (singular y plural, sin «pago recibido») y la selección de voz local, con descarte de voces remotas y de otros idiomas.
 
-### Pruebas ejecutadas realmente (Chromium 141 sin interfaz, Playwright, `npm run preview`, 320 × 640 px)
+### Pruebas ejecutadas realmente: `npm run test:e2e`
 
-- ✅ Sin desplazamiento horizontal a 320 px (`scrollWidth = 320`).
-- ✅ Texto vacío, texto con saldo, texto ambiguo y selección manual.
-- ✅ OCR real de una captura sintética: «Monto recibido: Bs 35,50 / Saldo: Bs 1.220,00» → **Bs 35,50** en ~1,4 s en el servidor de pruebas, incluida la preparación.
-- ✅ Volver a elegir **el mismo archivo**.
-- ✅ Imagen en blanco → «No encontramos texto». Archivo que no es imagen → «No pudimos abrir la imagen».
-- ✅ Dos selecciones seguidas: el input queda deshabilitado y se procesa una sola.
-- ✅ «Cancelar lectura» devuelve el estado a «Listo» con el input habilitado.
-- ✅ Recargar borra el historial. Nunca hay más de 3 entradas.
-- ✅ Portapapeles denegado → mensaje con la alternativa de pegar a mano.
-- ✅ Con una voz local simulada: «Simular prueba» dice exactamente «¡Prueba exitosa, el volumen está correcto!» y no agrega nada al historial. El texto dice «Monto detectado: 20 bolivianos con 50 centavos. Revisa el abono en tu banco». La voz remota simulada se ignora.
-- ✅ Sin voces: el resultado sigue visible y aparece el mensaje.
-- ✅ Sin conexión **después** de preparar: la app abre, lee texto y **ejecuta OCR**. La caché OCR contiene el worker, una variante del núcleo y el modelo.
-- ✅ Sin conexión **antes** de preparar: mensaje «el lector de imágenes todavía no está preparado».
-- ✅ Ninguna petición sale del origen (solo `blob:` locales) y la consola queda vacía.
+Se ejecutaron en **Chromium 141** sin interfaz, con Playwright, contra el build de producción. Resultado: **54 de 54 comprobaciones correctas**. Se repiten en dos perfiles emulados: tamaño de **iPhone SE (320 × 568)** y **Pixel 7**, ambos con pantalla táctil y agente de usuario móvil.
 
-**No se ejecutaron** pruebas en Chrome para Android ni en Safari para iOS reales. Hazlas con esta lista:
+| Área | Comprobación | Resultado |
+|---|---|---|
+| PWA | Manifest sin errores e instalable según Chromium (`Page.getInstallabilityErrors`) | ✅ |
+| Diseño | Sin desplazamiento horizontal a 320 px y a 412 px | ✅ |
+| Diseño | Todos los botones visibles miden ≥ 56 px de alto | ✅ |
+| Teclado | El primer Tab enfoca «Subir captura» | ✅ |
+| Texto | Vacío: error junto al campo (`aria-invalid`, `aria-describedby`) | ✅ |
+| Texto | `Saldo: Bs 500. Monto recibido: Bs 50` → Bs 50,00 | ✅ |
+| Texto | Dos montos plausibles → selección manual | ✅ |
+| Texto | `1.250` → revisar (1.250,00 o 1,25) | ✅ |
+| Texto | «pendiente» → advertencia visible | ✅ |
+| Voz | Sin voces: el monto sigue visible y aparece un mensaje | ✅ |
+| Voz | Voz local simulada: dice exactamente la frase de prueba y la del monto; ignora la voz remota; la prueba no agrega historial | ✅ |
+| Portapapeles | Permiso denegado → alternativa de pegar a mano | ✅ |
+| Imagen | Archivo que no es imagen, imagen dañada, > 10 MB, 42 MP → mensajes específicos | ✅ |
+| OCR | Captura sintética → Bs 35,50 (~1,3 s, incluida la preparación del lector) | ✅ |
+| OCR | Mismo archivo otra vez; selecciones rápidas → una sola lectura | ✅ |
+| OCR | Imagen en blanco → «No encontramos texto» | ✅ |
+| OCR | Captura borrosa → «No encontramos texto en la imagen»; la interfaz sigue usable | ✅ |
+| OCR | Cancelar a mitad → «Listo» con controles activos | ✅ |
+| Estado | Historial con máximo 3 entradas; recargar lo borra | ✅ |
+| Sin conexión | Con el lector preparado: abre, lee texto y hace OCR | ✅ |
+| Sin conexión | Sin preparar → «el lector de imágenes todavía no está preparado» | ✅ |
+| Errores | Modelo con HTTP 503 → «No se pudo descargar el lector»; el reintento funciona | ✅ |
+| PWA | Botón «Preparar lectura sin conexión» → «Lector listo» | ✅ |
+| PWA | Versión nueva del service worker → aviso → «Actualizar ahora» → recarga | ✅ |
+| Privacidad | Ninguna petición a otros dominios; sin errores en la consola | ✅ |
+
+**No se ejecutaron** pruebas en Chrome para Android ni en Safari para iOS **reales**. La emulación de Chromium no reproduce WebKit, las voces del sistema, el selector de fotos ni la memoria de un teléfono. Hazlas con esta lista:
 
 1. Instalar la app (ver Paso 6) y abrirla desde el icono.
 2. Subir una captura real de **tu propia** app bancaria y comparar el monto.
@@ -241,11 +265,11 @@ Según la documentación oficial de Vercel ([plan Hobby](https://vercel.com/docs
 
 Una herramienta que se ofrece a comerciantes para su negocio, o por la que alguien cobra (desarrollo, mantenimiento o suscripción), **no es elegible para Hobby**. En ese caso usa **Vercel Pro** (la arquitectura es 100 % compatible: *Framework preset* Vite, build `npm run build`, salida `dist`) o una alternativa estática.
 
-No pude abrir estas páginas directamente desde el entorno de trabajo porque la red lo bloqueó. Lo confirmé con resultados de búsqueda que citan esa documentación. **Vuelve a leer las condiciones vigentes antes de publicar.**
+La red del entorno de trabajo bloqueó la descarga directa de esas páginas. La frase textual de la documentación oficial, «Hobby teams are restricted to non-commercial personal use only», se confirmó mediante resultados de búsqueda que indexan esa página. **Vuelve a leer las condiciones vigentes antes de publicar.**
 
 ### Alternativa: Cloudflare Pages (plan Free)
 
-Según su [página de límites](https://developers.cloudflare.com/pages/platform/limits/), el plan Free permite 500 builds al mes, 20.000 archivos por sitio y **25 MiB por archivo**. Nuestro archivo más grande pesa 3,9 MB. La documentación de Pages no incluye una prohibición de uso comercial para sitios estáticos, pero sí aplican los términos generales de servicio de Cloudflare. **Revísalos antes de publicar; no es gratuidad ilimitada garantizada.**
+Según su [página de límites](https://developers.cloudflare.com/pages/platform/limits/), el plan Free permite 500 builds al mes, 20.000 archivos por sitio y **25 MiB por archivo**. Nuestro archivo más grande pesa 3,9 MB. Su [página de precios](https://developers.cloudflare.com/pages/functions/pricing/) indica que las solicitudes a recursos estáticos son gratuitas e ilimitadas en todos los planes cuando no invocan Functions, y esta app no usa Functions. La documentación de Pages no prohíbe el uso comercial, pero rigen los términos generales y el uso razonable de Cloudflare. **Revísalos antes de publicar; no es gratuidad ilimitada garantizada.**
 
 1. Sube el repositorio a GitHub.
 2. Cloudflare → Workers & Pages → Create → Pages → conectar el repositorio.
