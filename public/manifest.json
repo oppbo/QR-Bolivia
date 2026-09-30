@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Alerta QR Bolivia",
+  "short_name": "Alerta QR",
+  "description": "Lee en voz alta el monto de tu notificación bancaria. No verifica pagos: confirma el abono en tu banco.",
+  "lang": "es-BO",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0b3d91",
+  "background_color": "#ffffff",
+  "categories": ["business", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

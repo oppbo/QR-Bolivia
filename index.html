@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es-BO">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      viewport-fit=cover: permite respetar las áreas seguras (muesca, barra de gestos)
+      con env(safe-area-inset-*). interactive-widget=resizes-content: en Chrome para
+      Android el teclado reduce el área visible en lugar de tapar los controles.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>Alerta QR Bolivia</title>
+    <meta
+      name="description"
+      content="Lee en voz alta el monto de tu notificación bancaria. Procesa todo en tu teléfono. No verifica pagos: confirma el abono en tu banco."
+    />
+    <meta name="theme-color" content="#0b3d91" />
+    <meta name="color-scheme" content="light" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" href="./icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <!-- Metadatos para iOS al usar "Añadir a pantalla de inicio". -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Alerta QR" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+  </head>
+  <body>
+    <noscript>Alerta QR Bolivia necesita JavaScript activado para funcionar.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Recursos OCR: se copian desde node_modules con "npm run dev" / "npm run build".
+public/ocr/
+*.log
+.DS_Store

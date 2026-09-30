@@ -1,0 +1,45 @@
+@import 'tailwindcss';
+
+/* Colores de la marca como variables de Tailwind v4 (clases bg-marca, text-marca...). */
+@theme {
+  --color-marca: #0b3d91;
+  --color-marca-oscuro: #082c69;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+}
+
+@layer base {
+  html {
+    /* Evita que iOS agrande el texto al girar el teléfono. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  /* Foco siempre visible al navegar con teclado. */
+  :focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* Respeta la preferencia de reducir movimiento: sin animaciones ni scroll suave. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
