@@ -167,3 +167,21 @@ describe('WhatsApp', () => {
     expect(whatsappUrl(null, 'x')).toBe('https://wa.me/?text=x');
   });
 });
+
+import { csvAmount, csvCell, toCsv } from '@/lib/csv';
+
+describe('CSV', () => {
+  it('neutraliza fórmulas y escapa comillas', () => {
+    expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
+    expect(csvCell('+591')).toBe("'+591");
+    expect(csvCell('-5')).toBe("'-5");
+    expect(csvCell('@SUM')).toBe("'@SUM");
+    expect(csvCell('Ana, "la jefa"')).toBe('"Ana, ""la jefa"""');
+    expect(csvCell(-500)).toBe('-500');
+  });
+  it('genera montos con dos decimales y BOM', () => {
+    expect(csvAmount(12550)).toBe('125.50');
+    expect(csvAmount(-5)).toBe('-0.05');
+    expect(toCsv(['a'], [['b']])).toBe('﻿a\r\nb\r\n');
+  });
+});

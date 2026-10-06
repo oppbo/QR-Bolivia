@@ -3,6 +3,8 @@
 // ("YYYY-MM-DD") y nunca pasan por conversión de zona horaria.
 
 export const DEFAULT_TIMEZONE = 'America/La_Paz';
+/** Zonas ofrecidas en Ajustes (la base de datos acepta cualquier zona IANA válida). */
+export const TIMEZONES = ['America/La_Paz', 'America/Lima', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/Sao_Paulo', 'America/Bogota'];
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
