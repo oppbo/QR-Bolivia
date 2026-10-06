@@ -5,8 +5,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 // Las páginas vuelven a verificar la sesión en el servidor (defensa en profundidad).
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    // Sin Supabase configurado: todo va a la página que explica cómo configurarlo.
+    if (request.nextUrl.pathname === '/setup') return response;
+    return NextResponse.redirect(new URL('/setup', request.url));
+  }
 
   const supabase = createServerClient(url, key, {
     cookies: {
