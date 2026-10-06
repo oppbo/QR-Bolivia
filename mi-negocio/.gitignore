@@ -42,3 +42,7 @@ next-env.d.ts
 
 # La plantilla sí se versiona (solo valores de ejemplo).
 !.env.example
+
+# Playwright
+/test-results/
+/playwright-report/

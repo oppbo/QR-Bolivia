@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/primitives';
-import { emptyVariant, ProductForm } from '@/features/products/product-form';
+import { emptyVariant } from '@/features/products/draft';
+import { ProductForm } from '@/features/products/product-form';
 import { requireBusiness } from '@/lib/auth/session';
 
 export const metadata: Metadata = { title: 'Nuevo producto' };

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/primitives';
-import { emptyOrderDraft, OrderForm } from '@/features/orders/order-form';
+import { emptyOrderDraft } from '@/features/orders/draft';
+import { OrderForm } from '@/features/orders/order-form';
 import { requireBusiness } from '@/lib/auth/session';
 import { todayInTimezone } from '@/lib/dates';
 import { createClient } from '@/lib/supabase/server';

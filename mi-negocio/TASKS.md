@@ -1,29 +1,41 @@
 # Mi Negocio — lista de tareas
 
-Estado: en progreso. Se actualiza en cada avance.
+Estado: primera versión funcional, verificada en local. Última actualización: 2026-10-06.
 
-## Base
-- [x] Evaluar repositorio (app previa Alerta QR se conserva en la raíz; Mi Negocio vive en `mi-negocio/`)
+## Hecho
+- [x] Evaluar el repositorio: la app previa (Alerta QR, Vite) se conserva en la raíz; Mi Negocio vive en `mi-negocio/`
 - [x] Next.js 16 + TypeScript estricto + Tailwind 4 + Supabase local (CLI + Docker)
-- [x] Migraciones: esquema, restricciones, RLS, funciones transaccionales, vistas, storage
-- [x] Lógica de dominio: dinero, totales, saldos, ciclo de vida, fechas, teléfonos, WhatsApp
-- [x] Pruebas unitarias de dominio
-- [x] Pruebas de base de datos: escenarios A–G, carreras, idempotencia, reversión, restricciones, aislamiento y storage
+- [x] Migraciones: esquema, restricciones, FK compuestas por negocio, RLS, funciones transaccionales, vistas, storage privado
+- [x] Dominio centralizado: dinero, totales, saldos, ciclo de vida, fechas por zona horaria, teléfonos, WhatsApp, CSV
+- [x] Autenticación (login, registro, recuperación, nueva contraseña, callback), proxy y protección en servidor
+- [x] Onboarding atómico e idempotente
+- [x] Shell responsive: navegación inferior móvil, barra lateral de escritorio, Ajustes, «Nuevo pedido» visible
+- [x] Inicio con cifras reales y estado vacío
+- [x] Productos: variantes, stock (disponible/reservado/existencia), ajuste con motivo, libro de movimientos, archivo, foto
+- [x] Clientes: alta en el pedido sin perder el borrador, aviso de teléfono duplicado, saldos, historial, notas privadas, archivo
+- [x] Pedidos: lista con búsqueda, filtros y paginación en URL; crear (con anticipo atómico); editar borrador; detalle con transiciones, pagos, anulaciones, reembolsos, cancelación con decisión de devolución, edición de entrega, historial
+- [x] WhatsApp: resumen y recordatorio con vista previa, copiar y abrir (registra «se abrió»)
+- [x] Caja: rango local, totales, desglose por medio, lista unificada con anulados, gastos con anulación y corrección, CSV
+- [x] Exportación CSV de pedidos con los filtros actuales
+- [x] Ajustes: negocio, zona horaria, QR de cobro (sin recorte, descarga firmada), logo, perfil, contraseña, cerrar sesión
+- [x] PWA: manifest, íconos, service worker solo para estáticos, aviso sin conexión y envíos deshabilitados
+- [x] Seed de desarrollo determinístico y repetible (Luna Boutique + negocio aislado B)
+- [x] Pruebas: 58 unitarias, 41 de base de datos real, 12 en navegador; lint, typecheck y build sin errores
+- [x] README, nota de arquitectura, .env.example
 
-## Interfaz
-- [ ] Autenticación (login, registro, recuperación, restablecer) + proxy + onboarding
-- [ ] Shell (navegación inferior móvil, barra lateral escritorio), tokens de diseño
-- [ ] Inicio
-- [ ] Productos (lista, crear/editar, ajuste de stock, archivar)
-- [ ] Clientes (lista, detalle, crear/editar, archivar)
-- [ ] Pedidos (lista con filtros, crear, editar borrador, detalle con acciones)
-- [ ] Pagos, anulaciones, reembolsos, cancelación
-- [ ] WhatsApp (vista previa, copiar, abrir)
-- [ ] Caja (resumen, por medio, lista, gastos, corrección) + CSV
-- [ ] Ajustes (negocio, QR, logo, cuenta)
-- [ ] PWA (manifest, iconos, service worker seguro, estado de conexión)
+## Pendiente / siguientes pasos sugeridos
+- [ ] Configurar SMTP y URLs de redirección en un proyecto Supabase alojado y probar correos reales
+- [ ] Probar la instalación de la PWA en Android físico y con lectores de pantalla (TalkBack)
+- [ ] Revisar la documentación oficial de WhatsApp «click to chat» (no accesible desde el entorno de desarrollo)
+- [ ] Fotos de productos en el seed (hoy se muestra un ícono local)
+- [ ] Despliegue público (acción separada, no realizada)
 
-## Entrega
-- [ ] Seed de desarrollo determinístico
-- [ ] Pruebas de navegador (Playwright)
-- [ ] README, nota de arquitectura, .env.example
+## Cómo retomar
+```bash
+cd mi-negocio
+npm install
+SUPABASE_INTERNAL_IMAGE_REGISTRY=docker.io npm run db:start   # o npm run db:start
+npm run db:reset && npm run db:seed
+npm run dev
+npm test && npm run test:db && npm run test:e2e
+```

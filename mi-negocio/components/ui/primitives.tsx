@@ -147,7 +147,7 @@ export function Stat({ label, value, help, tone }: { label: string; value: React
   return (
     <div className={cx('rounded-[var(--radius-card)] border bg-surface p-4', tone === 'warning' ? 'border-warning/40' : 'border-line')}>
       <p className="text-sm font-medium text-muted">{label}</p>
-      <p className="tabular mt-1 text-2xl font-bold">{value}</p>
+      <p className="tabular mt-1 text-xl font-bold whitespace-nowrap sm:text-2xl">{value}</p>
       {help ? <p className="mt-1 text-sm text-muted">{help}</p> : null}
     </div>
   );

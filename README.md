@@ -1,3 +1,5 @@
+> **Nuevo en este repositorio: [Mi Negocio](mi-negocio/README.md)**, una app de pedidos, stock, saldos y caja para negocios que venden por WhatsApp (Next.js + Supabase), en la carpeta `mi-negocio/`. Es independiente de Alerta QR, que se documenta a continuación.
+
 # Alerta QR Bolivia (MVP)
 
 PWA que **lee en voz alta el monto** de una captura de la notificación bancaria del propio comerciante, o del texto de un SMS pegado. Está pensada para tiendas de barrio, puestos de comida, pensiones, vendedores de mercado y taxistas.

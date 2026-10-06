@@ -2,7 +2,7 @@
 
 import { Minus, Package, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { confirmDiscard, useUnsavedChangesWarning } from '@/components/use-unsaved';
 import { Dialog } from '@/components/ui/dialog';
 import { Alert, Badge, Button, Card, cx, describedBy, Field, Input, Select, Textarea } from '@/components/ui/primitives';
@@ -13,50 +13,7 @@ import { computeOrderTotals } from '@/lib/money/order-math';
 import { PAYMENT_METHOD_LABEL, PAYMENT_METHODS } from '@/lib/orders/labels';
 import { formatPhone } from '@/lib/phone';
 import { createOrder, searchCustomers, searchVariants, updateOrderDraft, type CustomerOption, type VariantOption } from './actions';
-
-export interface LineDraft {
-  key: string;
-  variant_id: string;
-  product_name: string;
-  label: string | null;
-  track_inventory: boolean;
-  available: number | null;
-  quantity: string;
-  unit_price: string;
-  list_price_cents: number;
-}
-
-export interface OrderDraft {
-  customer: CustomerOption | null;
-  walkIn: boolean;
-  customer_name: string;
-  customer_phone: string;
-  fulfillment_type: 'pickup' | 'delivery';
-  promised_date: string;
-  time_window: string;
-  delivery_address: string;
-  delivery_reference: string;
-  notes: string;
-  discount: string;
-  delivery_fee: string;
-  lines: LineDraft[];
-}
-
-export const emptyOrderDraft = (customer: CustomerOption | null = null): OrderDraft => ({
-  customer,
-  walkIn: false,
-  customer_name: '',
-  customer_phone: '',
-  fulfillment_type: 'pickup',
-  promised_date: '',
-  time_window: '',
-  delivery_address: customer?.address ?? '',
-  delivery_reference: customer?.delivery_reference ?? '',
-  notes: '',
-  discount: '',
-  delivery_fee: '',
-  lines: [],
-});
+import type { LineDraft, OrderDraft } from './draft';
 
 let seq = 0;
 const lineKey = () => `l${Date.now()}-${seq++}`;
@@ -68,6 +25,23 @@ function useDebounced<T>(value: T, ms: number) {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
+}
+
+/** Búsqueda remota con debounce; "cargando" se deriva sin setState sincrónico en el efecto. */
+function useRemoteSearch<T>(fn: (q: string) => Promise<T[]>, q: string, enabled: boolean) {
+  const debounced = useDebounced(q, 250);
+  const [resolved, setResolved] = useState<{ key: string | null; results: T[] }>({ key: null, results: [] });
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fn(debounced)
+      .then((r) => alive && setResolved({ key: debounced, results: r }))
+      .catch(() => alive && setResolved({ key: debounced, results: [] }));
+    return () => {
+      alive = false;
+    };
+  }, [debounced, enabled, fn]);
+  return { results: resolved.results, loading: enabled && resolved.key !== debounced };
 }
 
 function money(raw: string): number | null {
@@ -99,8 +73,7 @@ export function OrderForm({
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('');
   // Una clave por formulario: reintentos del mismo envío nunca duplican el pedido.
-  const idempotencyKey = useRef<string>('');
-  if (!idempotencyKey.current && typeof crypto !== 'undefined') idempotencyKey.current = crypto.randomUUID();
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   useUnsavedChangesWarning(dirty && !pending);
 
   const patch = (p: Partial<OrderDraft>) => {
@@ -185,7 +158,7 @@ export function OrderForm({
               order,
               confirm,
               payment: confirm && withPayment ? { amount: payAmount, method: payMethod } : null,
-              idempotencyKey: idempotencyKey.current,
+              idempotencyKey,
             }).catch(() => null)
           : await updateOrderDraft(orderId!, revision!, order).catch(() => null);
       if (!r) {
@@ -446,24 +419,9 @@ function CustomerPicker({
   error?: string;
 }) {
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<CustomerOption[]>([]);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const debounced = useDebounced(q, 250);
-
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    setLoading(true);
-    searchCustomers(debounced)
-      .then((r) => alive && setResults(r))
-      .catch(() => alive && setResults([]))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [debounced, open]);
+  const { results, loading } = useRemoteSearch(searchCustomers, q, open);
 
   if (value) {
     return (
@@ -541,23 +499,8 @@ function CustomerPicker({
 
 function VariantPicker({ onPick }: { onPick: (v: VariantOption) => void }) {
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<VariantOption[]>([]);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const debounced = useDebounced(q, 250);
-
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    setLoading(true);
-    searchVariants(debounced)
-      .then((r) => alive && setResults(r))
-      .catch(() => alive && setResults([]))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [debounced, open]);
+  const { results, loading } = useRemoteSearch(searchVariants, q, open);
 
   return (
     <div className="flex flex-col gap-2">

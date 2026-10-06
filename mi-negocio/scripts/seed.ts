@@ -73,7 +73,8 @@ function at(dayOffset: number, hh: number, mm = 0): string {
   return new Date(Math.min(t, Date.now() - 60_000)).toISOString();
 }
 
-async function check<T>(p: PromiseLike<{ data: T; error: unknown }>, what: string): Promise<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function check(p: PromiseLike<{ data: any; error: unknown }>, what: string): Promise<any> {
   const { data, error } = await p;
   if (error) throw new Error(`${what}: ${JSON.stringify(error)}`);
   return data;
